@@ -94,6 +94,8 @@ class DataLoader(object):
         self.conn.commit()
 
 CHAIN_COLUMN_INDEX = 4
+CLASS_COLUMN_INDEX = 2
+TOTAL_TIME_COLUMN_INDEX = 3
 
 class DataSearcher(object):
     def __init__(self, dbname, db_password):
@@ -146,6 +148,24 @@ class DataSearcher(object):
         Return the equivalent row for just that route
         '''
         return row
+
+    def routes_stats(self, rows):
+        '''
+        given the result of a query get some statistics on it
+        '''
+        n_journeys = len(rows)
+
+        veh_classes = [row[CLASS_COLUMN_INDEX] for row in rows]
+        class_summary = {}
+        for veh_class in set(veh_classes):
+            n_class = len([c for c in veh_classes if veh_class == c])
+            class_summary[veh_class] = n_class / n_journeys * 100
+        trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
+
+        average_trip_time = sum(trip_times, datetime.timedelta())/len(trip_times)
+
+        return (n_journeys, class_summary, average_trip_time)
+
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Script for loading data from anpr spreadsheets into a db")
