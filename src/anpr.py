@@ -107,8 +107,10 @@ class DataSearcher(object):
         cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename SIMILAR TO 's[0-9][0-9]_*\_%';")
         return [site_name for (site_name, ) in cur]
 
-    def search_journeys(self, start, end, via = [], start_time=None, end_time=None, indirect_allowed=True):
+    def search_journeys(self, start, end, via=[], start_time=None, end_time=None, indirect_allowed=True):
         cur = self.conn.cursor()
+
+        route_regex = self.make_route_regex(start, end, via, indirect_allowed)
         sites = [start, end] + via
         for site in sites:
             if ("s" + site) not in self.sites:
@@ -119,17 +121,9 @@ class DataSearcher(object):
 
         cur.execute(sql.SQL("SELECT * from journeys where journey_id in ({})").format(site_filter))
         # TODO do filtering (coarse and fine) on date
-        return [self.extract_route(row, start, end, via, indirect_allowed) for row in cur if self.match_route(row[CHAIN_COLUMN_INDEX], start, end, via, indirect_allowed)]
+        return [self.extract_route(row, start, end, via, indirect_allowed) for row in cur if re.search(route_regex, row[CHAIN_COLUMN_INDEX])]
 
-    def match_route(self, route, start, end, via, indirect_allowed=True):
-        '''
-        check if the given route contains any subroute
-        that matches the required start, stop and via conditions
-        return true if there is at least one matching subroute
-        else false
-        The indirect_allowed flag determines whether the route can include sites in addition
-        to the ones in start, end and via
-        '''
+    def make_route_regex(self, start, end, via, indirect_allowed):
         site_regex = r"(\d\d\D?_([NESW]|(OUT)|(IN))>)"
         if (start == end and via == []):
             route_regex = r"{start}.*".format(start)
@@ -139,8 +133,7 @@ class DataSearcher(object):
         else:
             via_regex = "".join([site_regex+"*"+site + ">" for site in via])
             route_regex = start + ">" + via_regex + site_regex + "*" + end
-        s = re.search(route_regex, route)
-        return bool(s)
+        return route_regex
 
     def extract_route(self, row, start, end, via, indirect_allowed=True):
         '''
