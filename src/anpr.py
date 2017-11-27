@@ -6,6 +6,7 @@ import glob
 import os
 import argparse
 import re
+import csv
 
 CAMERA_START=1
 CAMERA_END=97
@@ -109,7 +110,7 @@ class DataSearcher(object):
         cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename SIMILAR TO 's[0-9][0-9]_*\_%';")
         return [site_name for (site_name, ) in cur]
 
-    def search_journeys(self, start, end, via=[], start_time=None, end_time=None, indirect_allowed=True):
+    def search_journeys(self, start, end, via=[], start_time=None, end_time=None, indirect_allowed=True, filter_classes=None):
         cur = self.conn.cursor()
 
         route_regex = self.make_route_regex(start, end, via, indirect_allowed)
@@ -120,8 +121,15 @@ class DataSearcher(object):
 
         site_queries = [sql.SQL("SELECT * from {}").format(sql.Identifier("s"+site)) for site in sites if site is not None]
         site_filter = sql.SQL(" INTERSECT ").join(site_queries)
+        if filter_classes is None:
+            class_filter = sql.SQL("")
+        else:
+            class_filter = sql.SQL("AND (class in %s)")
 
-        cur.execute(sql.SQL("SELECT * from journeys where journey_id in ({})").format(site_filter))
+        if filter_classes is None:
+            cur.execute(sql.SQL("SELECT * from journeys where (journey_id in ({})) {}").format(site_filter, class_filter))
+        else:
+            cur.execute(sql.SQL("SELECT * from journeys where journey_id in ({}) {}").format(site_filter, class_filter), [tuple(filter_classes)])
         # TODO do filtering (coarse and fine) on date
         row_lists = [self.extract_route(row, route_regex) for row in cur if re.search(route_regex, row[CHAIN_COLUMN_INDEX])]
         #there could be multiple matches (and therefore output rows) per journey so extract_route
@@ -189,9 +197,6 @@ class DataSearcher(object):
 
         return sum(time_offsets)
 
-
-
-
 class DataStats(object):
     '''
     Given a list of rows that matched a query calculate some statistics on them
@@ -200,8 +205,14 @@ class DataStats(object):
         self.rows = rows
         self.routes_stats(rows)
 
+    def serialise(self):
+        with open("data.csv", 'w') as csvfile:
+            writer = csv.writer(csvfile)
+            for row in self.rows:
+                writer.writerow([str(r) for r in row])
+
     def __str__(self):
-        return "n_journeys:{}\nvehicle class summary (%):{}\naverage trip time:{}".format(
+        return "n_journeys:{}\nvehicle class summary (% of total, number):{}\naverage trip time:{}".format(
         self.n_journeys, self.class_summary, self.average_trip_time
         )
 
@@ -212,11 +223,10 @@ class DataStats(object):
         self.class_summary = {}
         for veh_class in set(veh_classes):
             n_class = len([c for c in veh_classes if veh_class == c])
-            self.class_summary[veh_class] = n_class / self.n_journeys * 100
+            self.class_summary[veh_class] = (n_class / self.n_journeys * 100, n_class)
         self.trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
 
         self.average_trip_time = sum(self.trip_times, datetime.timedelta())/len(self.trip_times)
-
 
 
 
