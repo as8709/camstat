@@ -204,6 +204,10 @@ class DataStats(object):
     def __init__(self, rows):
         self.rows = rows
         self.routes_stats(rows)
+        self.class_summary = {}
+        self.trip_times = []
+        self.n_journeys = 0
+        self.average_trip_time = None
 
     def serialise(self):
         with open("data.csv", 'w') as csvfile:
@@ -218,15 +222,42 @@ class DataStats(object):
 
     def routes_stats(self, rows):
         self.n_journeys = len(rows)
+        if self.n_journeys:
+            veh_classes = [row[CLASS_COLUMN_INDEX] for row in rows]
+            self.class_summary = {}
+            for veh_class in set(veh_classes):
+                n_class = len([c for c in veh_classes if veh_class == c])
+                self.class_summary[veh_class] = (n_class / self.n_journeys * 100, n_class)
+            self.trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
 
-        veh_classes = [row[CLASS_COLUMN_INDEX] for row in rows]
-        self.class_summary = {}
-        for veh_class in set(veh_classes):
-            n_class = len([c for c in veh_classes if veh_class == c])
-            self.class_summary[veh_class] = (n_class / self.n_journeys * 100, n_class)
-        self.trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
+            self.average_trip_time = sum(self.trip_times, datetime.timedelta())/len(self.trip_times)
+            return (self.n_journeys, self.class_summary, self.trip_times, self.average_trip_time)
+        else:
+            return (0, {}, [], None)
+    def group_by_start_hour(self):
+        '''
+        Group the rows by hour
+        '''
+        groups = {}
+        #TODO default dict
+        for i in range(24):
+            groups[i] = []
+        for row in self.rows:
+            start_time = row[TIMESTAMP_COLUMN_INDEX]
+            groups[start_time.hour].append(row)
+        return groups
 
-        self.average_trip_time = sum(self.trip_times, datetime.timedelta())/len(self.trip_times)
+    def durations_by_hour(self):
+        '''
+        Collect the average durations of journeys grouped by start hour
+        '''
+        hour_groups = self.group_by_start_hour()
+        out = []
+        for hour, rows in hour_groups.items():
+            (n_journeys,_,times,avg_time) = self.routes_stats(rows)
+            if n_journeys:
+                out.append((hour, avg_time.seconds, max(times).seconds, min(times).seconds))
+        return out
 
 
 
