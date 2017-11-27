@@ -189,22 +189,35 @@ class DataSearcher(object):
 
         return sum(time_offsets)
 
+
+
+
+class DataStats(object):
+    '''
+    Given a list of rows that matched a query calculate some statistics on them
+    '''
+    def __init__(self, rows):
+        self.rows = rows
+        self.routes_stats(rows)
+
+    def __str__(self):
+        return "n_journeys:{}\nvehicle class summary (%):{}\naverage trip time:{}".format(
+        self.n_journeys, self.class_summary, self.average_trip_time
+        )
+
     def routes_stats(self, rows):
-        '''
-        given the result of a query get some statistics on it
-        '''
-        n_journeys = len(rows)
+        self.n_journeys = len(rows)
 
         veh_classes = [row[CLASS_COLUMN_INDEX] for row in rows]
-        class_summary = {}
+        self.class_summary = {}
         for veh_class in set(veh_classes):
             n_class = len([c for c in veh_classes if veh_class == c])
-            class_summary[veh_class] = n_class / n_journeys * 100
-        trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
+            self.class_summary[veh_class] = n_class / self.n_journeys * 100
+        self.trip_times = [row[TOTAL_TIME_COLUMN_INDEX] for row in rows]
 
-        average_trip_time = sum(trip_times, datetime.timedelta())/len(trip_times)
+        self.average_trip_time = sum(self.trip_times, datetime.timedelta())/len(self.trip_times)
 
-        return (n_journeys, class_summary, average_trip_time)
+
 
 
 if __name__=="__main__":
