@@ -209,11 +209,12 @@ class DataStats(object):
         self.n_journeys = 0
         self.average_trip_time = None
 
-    def serialise(self):
+
+    def serialise(self, entries, filename="data.csv"):
         with open("data.csv", 'w') as csvfile:
             writer = csv.writer(csvfile)
-            for row in self.rows:
-                writer.writerow([str(r) for r in row])
+            for entry in entries:
+                writer.writerow(entry)
 
     def __str__(self):
         return "n_journeys:{}\nvehicle class summary (% of total, number):{}\naverage trip time:{}".format(
@@ -247,18 +248,24 @@ class DataStats(object):
             groups[start_time.hour].append(row)
         return groups
 
+
+    def stats_by_hour(self):
+        '''
+        Collect stats for all journeys when they are grouped by start hour
+        '''
+        hour_groups = self.group_by_start_hour()
+        return {hour: self.routes_stats(rows) for hour, rows in hour_groups.items()}
+
     def durations_by_hour(self):
         '''
         Collect the average durations of journeys grouped by start hour
         '''
-        hour_groups = self.group_by_start_hour()
+        hour_groups = self.stats_by_hour()
         out = []
-        for hour, rows in hour_groups.items():
-            (n_journeys,_,times,avg_time) = self.routes_stats(rows)
+        for hour, (n_journeys,_,times,avg_time) in hour_groups.items():
             if n_journeys:
                 out.append((hour, avg_time.seconds, max(times).seconds, min(times).seconds))
         return out
-
 
 
 if __name__=="__main__":
