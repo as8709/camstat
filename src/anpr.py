@@ -7,6 +7,10 @@ import os
 import argparse
 import re
 import csv
+import functools
+
+import filters
+
 
 CAMERA_START=1
 CAMERA_END=97
@@ -100,102 +104,28 @@ CLASS_COLUMN_INDEX = 2
 TIMESTAMP_COLUMN_INDEX = 1
 TOTAL_TIME_COLUMN_INDEX = 3
 
+def compose(*functions):
+    return functools.reduce(lambda f, g: lambda x: f(g(x)), functions, lambda x: x)
+
 class DataSearcher(object):
-    def __init__(self, dbname, db_password):
+    def __init__(self, dbname, db_password, filters=[]):
         self.conn = psy.connect("dbname={} password={}".format(dbname, db_password))
-        self.sites = self.get_sites()
+        for fil in filters:
+            assert(issubclass(fil, filters.FilterBase))
+        #compose all the fine pass filters into one function
+        #TODO check that the order is preserved
+        self.fine_pass = compose([fil.fine_pass for fil in filters])
 
-    def get_sites(self):
+    def get_and_filter(self):
+        '''
+        Go to the DB and apply the filters
+        '''
         cur = self.conn.cursor()
-        cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename SIMILAR TO 's[0-9][0-9]_*\_%';")
-        return [site_name for (site_name, ) in cur]
+        sql_filters = sql.SQL(" AND ").join([fil.coarse_pass() for fil in self.filters])
 
-    def search_journeys(self, start, end, via=[], start_time=None, end_time=None, indirect_allowed=True, filter_classes=None):
-        cur = self.conn.cursor()
+        cur.execute(sql.SQL("SELECT * from journeys where {};").format(sql_filter))
 
-        route_regex = self.make_route_regex(start, end, via, indirect_allowed)
-        sites = [start, end] + via
-        for site in sites:
-            if ("s" + site) not in self.sites:
-                raise Exception("unkown site:{}".format(site))
-
-        site_queries = [sql.SQL("SELECT * from {}").format(sql.Identifier("s"+site)) for site in sites if site is not None]
-        site_filter = sql.SQL(" INTERSECT ").join(site_queries)
-        if filter_classes is None:
-            class_filter = sql.SQL("")
-        else:
-            class_filter = sql.SQL("AND (class in %s)")
-
-        if filter_classes is None:
-            cur.execute(sql.SQL("SELECT * from journeys where (journey_id in ({})) {}").format(site_filter, class_filter))
-        else:
-            cur.execute(sql.SQL("SELECT * from journeys where journey_id in ({}) {}").format(site_filter, class_filter), [tuple(filter_classes)])
-        # TODO do filtering (coarse and fine) on date
-        row_lists = [self.extract_route(row, route_regex) for row in cur if re.search(route_regex, row[CHAIN_COLUMN_INDEX])]
-        #there could be multiple matches (and therefore output rows) per journey so extract_route
-        # returns a list of lists, flatten this list
-        return [x for rows in row_lists for x in rows]
-
-
-    def make_route_regex(self, start, end, via, indirect_allowed):
-        site_regex = r"(\d\d\D?_([NESW]|(OUT)|(IN))>)"
-        if (start == end and via == []):
-            route_regex = r"{start}.*".format(start)
-        elif not indirect_allowed:
-            via_regex = ">".join(via)
-            route_regex = start + ">" + via_regex + ">" + end
-        else:
-            via_regex = "".join([site_regex+"*"+site + ">" for site in via])
-            route_regex = start + ">" + via_regex + site_regex + "*" + end
-        return route_regex
-
-    def extract_route(self, row, route_regex):
-        '''
-        Assuming this row contains at least one matching sub match_route
-        Return the equivalent row for just that subroute, changing the times accordinglu
-        '''
-        matched_chains = re.findall("("+route_regex +")", row[CHAIN_COLUMN_INDEX])
-        out_rows = []
-        for matched_chain in matched_chains:
-            if type(matched_chain) == tuple:
-                matched_chain = matched_chain[0]
-            first_site = matched_chain.split(">")[0]
-
-            #find how many sites into the chain the match starts
-            match_start = row[CHAIN_COLUMN_INDEX].find(matched_chain)
-            match_chain_index_start = row[CHAIN_COLUMN_INDEX][:match_start].count(">")
-
-            match_chain_index_end = match_chain_index_start + len(matched_chain.split(">")) - 1
-            # the chain with the times misses the first site in the CHAIN_COLUMN_INDEX
-            # add it back in
-            time_chain = (first_site + "(0.0)" + row[CHAIN_TIME_COLUMN_INDEX]).split(">")
-
-            start_time_offset = self.get_time_offset_from_time_chain(time_chain, match_chain_index_start)
-            end_time_offset = self.get_time_offset_from_time_chain(time_chain, match_chain_index_end)
-
-            start_time_offset = datetime.timedelta(minutes=start_time_offset)
-            end_time_offset = datetime.timedelta(minutes=end_time_offset)
-
-            start_time = row[TIMESTAMP_COLUMN_INDEX] + start_time_offset
-            end_time = row[TIMESTAMP_COLUMN_INDEX] + end_time_offset
-
-            new_time_chain = ">".join(time_chain[match_chain_index_start:(match_chain_index_end+1)])
-            new_row = (row[0], start_time, row[CLASS_COLUMN_INDEX], end_time-start_time, matched_chain, new_time_chain, end_time)
-            out_rows.append(new_row)
-        return out_rows
-
-    def get_time_offset_from_time_chain(self, time_chain, chain_index):
-        '''
-        Given a time chain and an index to a given entry
-        parse the time differences assuming each entry is
-        in the format <site_name>(<time_offset>)
-        then return the total time offset up to the given index
-        return the time offset
-        '''
-        entry_regex = r"\d\d\D?_([NESW]|(OUT)|(IN))\((\d+(.\d+)?)\)"
-        time_offsets = [float(re.match(entry_regex, entry).group(4)) for entry in time_chain[:(chain_index+1)]]
-
-        return sum(time_offsets)
+        return self.fine_pass(cur)
 
 class DataStats(object):
     '''
