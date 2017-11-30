@@ -3,6 +3,7 @@ from psycopg2 import sql
 
 import abc
 import re
+import datetime
 
 CHAIN_COLUMN_INDEX = 4
 CHAIN_TIME_COLUMN_INDEX = 5
@@ -54,7 +55,7 @@ class SiteFilter(FilterBase):
         site_queries = [sql.SQL("SELECT * from {}").format(sql.Identifier("s"+site)) for site in self.sites if site is not None]
         return sql.SQL("(journey_id in ({}))").format(sql.SQL(" INTERSECT ").join(site_queries))
 
-    def fine_pass(rows):
+    def fine_pass(self, rows):
         '''
         Iterate over the rows
         discard any rows which don't match the route_regex
@@ -135,7 +136,7 @@ class ClassFilter(FilterBase):
     def __init__(self, allowed_classes):
         self.allowed_classes = allowed_classes
 
-    def coarse_pass(self, rows):
+    def coarse_pass(self):
         '''
         '''
         return sql.SQL("(class in {})").format(sql.Literal(tuple(self.allowed_classes)))

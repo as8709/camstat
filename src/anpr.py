@@ -104,17 +104,19 @@ CLASS_COLUMN_INDEX = 2
 TIMESTAMP_COLUMN_INDEX = 1
 TOTAL_TIME_COLUMN_INDEX = 3
 
-def compose(*functions):
+def compose(functions):
     return functools.reduce(lambda f, g: lambda x: f(g(x)), functions, lambda x: x)
 
 class DataSearcher(object):
-    def __init__(self, dbname, db_password, filters=[]):
+    def __init__(self, dbname, db_password, filter_lst=[], group_lst=[]):
         self.conn = psy.connect("dbname={} password={}".format(dbname, db_password))
-        for fil in filters:
-            assert(issubclass(fil, filters.FilterBase))
+        for fil in filter_lst:
+            assert(isinstance(fil, filters.FilterBase))
+        self.filters = filter_lst
         #compose all the fine pass filters into one function
         #TODO check that the order is preserved
-        self.fine_pass = compose([fil.fine_pass for fil in filters])
+        self.fine_pass = compose([fil.fine_pass for fil in filter_lst])
+        self.group = compose([group.group for group in group_lst])
 
     def get_and_filter(self):
         '''
@@ -123,9 +125,15 @@ class DataSearcher(object):
         cur = self.conn.cursor()
         sql_filters = sql.SQL(" AND ").join([fil.coarse_pass() for fil in self.filters])
 
-        cur.execute(sql.SQL("SELECT * from journeys where {};").format(sql_filter))
-
+        cur.execute(sql.SQL("SELECT * from journeys where {};").format(sql_filters))
         return self.fine_pass(cur)
+
+    def combined(self):
+        '''
+        get the results from the db, apply the filters
+        and group
+        '''
+        return self.group(self.get_and_filter())
 
 class DataStats(object):
     '''
