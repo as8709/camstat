@@ -5,11 +5,11 @@ import abc
 import re
 import datetime
 
+TIMESTAMP_COLUMN_INDEX = 1
+CLASS_COLUMN_INDEX = 2
+TOTAL_TIME_COLUMN_INDEX = 3
 CHAIN_COLUMN_INDEX = 4
 CHAIN_TIME_COLUMN_INDEX = 5
-CLASS_COLUMN_INDEX = 2
-TIMESTAMP_COLUMN_INDEX = 1
-TOTAL_TIME_COLUMN_INDEX = 3
 
 class FilterBase(object):
     __metaclass__ = abc.ABCMeta

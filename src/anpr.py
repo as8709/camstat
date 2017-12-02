@@ -10,6 +10,8 @@ import csv
 import functools
 
 import filters
+import groups
+import stats
 
 
 CAMERA_START=1
@@ -108,7 +110,7 @@ def compose(functions):
     return functools.reduce(lambda f, g: lambda x: f(g(x)), functions, lambda x: x)
 
 class DataSearcher(object):
-    def __init__(self, dbname, db_password, filter_lst=[], group_lst=[]):
+    def __init__(self, dbname, db_password, filter_lst=[], group_lst=[], stats_lst=[]):
         self.conn = psy.connect("dbname={} password={}".format(dbname, db_password))
         for fil in filter_lst:
             assert(isinstance(fil, filters.FilterBase))
@@ -116,7 +118,14 @@ class DataSearcher(object):
         #compose all the fine pass filters into one function
         #TODO check that the order is preserved
         self.fine_pass = compose([fil.fine_pass for fil in filter_lst])
+
+        for group in group_lst:
+            assert(isinstance(group, groups.GroupBase))
         self.group = compose([group.group for group in group_lst])
+
+        for stat in stats_lst:
+            assert(isinstance(stat, stats.BaseStats))
+        self.stats = stats_lst
 
     def get_and_filter(self):
         '''
@@ -130,10 +139,26 @@ class DataSearcher(object):
 
     def combined(self):
         '''
-        get the results from the db, apply the filters
-        and group
+        get the results from the db, apply the filters,
+        group then get the statistics for each group of rows
         '''
-        return self.group(self.get_and_filter())
+        groups = self.group(self.get_and_filter())
+        return self.apply_stats(groups)
+
+    def stat_headers(self):
+        out = []
+        for stat in self.stats:
+            out += stat.stat_descriptions()
+        return out
+
+    def apply_stats(self, group_or_rows):
+        if isinstance(group_or_rows, list):
+            stat_lists = [stats.make_stats(group_or_rows) for stats in self.stats]
+            return [stat for sublist in stat_lists for stat in sublist]
+        elif isinstance(group_or_rows, dict):
+            return {key: self.apply_stats(value) for key, value in group_or_rows.items()}
+        else:
+            raise Exception("Unknown group type:{}".format(type(group_or_rows)))
 
 class DataStats(object):
     '''
