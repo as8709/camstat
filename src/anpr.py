@@ -133,8 +133,11 @@ class DataSearcher(object):
         '''
         cur = self.conn.cursor()
         sql_filters = sql.SQL(" AND ").join([fil.coarse_pass() for fil in self.filters])
-
-        cur.execute(sql.SQL("SELECT * from journeys where {};").format(sql_filters))
+        if self.filters:
+            cur.execute(sql.SQL("SELECT * from journeys where {};").format(sql_filters))
+        else:
+            #no filter means no WHERE
+            cur.execute("SELECT * from journeys;")
         return self.fine_pass(cur)
 
     def combined(self):
@@ -142,7 +145,7 @@ class DataSearcher(object):
         get the results from the db, apply the filters,
         group then get the statistics for each group of rows
         '''
-        groups = self.group(self.get_and_filter())
+        groups = self.group(list(self.get_and_filter()))
         return self.apply_stats(groups)
 
     def stat_headers(self):
