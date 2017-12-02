@@ -37,3 +37,12 @@ class GroupByClass(GroupBase):
             vehicle_class = row[CLASS_COLUMN_INDEX]
             groups[vehicle_class].append(row)
         return groups
+
+class GroupByStartSite(GroupBase):
+    def group_rows(self, rows):
+        groups = collections.defaultdict(list)
+        for row in rows:
+            journey_chain = row[CHAIN_COLUMN_INDEX]
+            start_site = journey_chain.split(">")[0]
+            groups[start_site].append(row)
+        return groups
