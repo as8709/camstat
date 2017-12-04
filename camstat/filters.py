@@ -132,6 +132,22 @@ class StartEndViaFilter(SiteFilter):
             route_regex = start + ">" + via_regex + site_regex + "*" + end
         return route_regex
 
+class VisitsFilter(SiteFilter):
+    '''
+    Select only journeys that visit the given list of sites.
+    in any order
+    '''
+    def __init__(self, visited_sites=[]):
+        self.visited_sites=visited_sites
+
+    def coarse_pass(self):
+        site_queries = [sql.SQL("SELECT * from {}").format(sql.Identifier("s"+site)) for site in self.visited_sites]
+        return sql.SQL("(journey_id in ({}))").format(sql.SQL(" INTERSECT ").join(site_queries))
+
+    def fine_pass(self, rows):
+        return rows
+
+
 class ClassFilter(FilterBase):
     def __init__(self, allowed_classes):
         self.allowed_classes = allowed_classes
