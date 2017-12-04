@@ -46,3 +46,16 @@ class GroupByStartSite(GroupBase):
             start_site = journey_chain.split(">")[0]
             groups[start_site].append(row)
         return groups
+
+class GroupByVisitedSites(GroupBase):
+    '''
+    Group the rows by any site visited
+    (this will duplicate rows as each journey may visit multiple sites)
+    '''
+    def group_rows(self, rows):
+        groups = collections.defaultdict(list)
+        for row in rows:
+            journey_chain = row[CHAIN_COLUMN_INDEX]
+            for site in set(journey_chain.split(">")):
+                groups[site].append(row)
+        return groups
