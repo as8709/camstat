@@ -9,9 +9,9 @@ import re
 import csv
 import functools
 
-import filters
-import groups
-import stats
+from . import filters
+from . import groups
+from . import stats
 
 
 CAMERA_START=1
