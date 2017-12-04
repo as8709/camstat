@@ -36,14 +36,24 @@ class TimeStats(BaseStats):
         return ["Min trip time(s)", "Max trip time(s)", "Avg. trip time"]
 
 class NStats(BaseStats):
+
+    def __init__(self, show_class_summary=False):
+        self.show_class_summary = show_class_summary
+
     def make_stats(self, rows):
         n_journeys = len(rows)
         veh_classes = [row[CLASS_COLUMN_INDEX] for row in rows]
-        class_summary = {}
-        for veh_class in set(veh_classes):
-            n_class = len([c for c in veh_classes if veh_class == c])
-            class_summary[veh_class] = (n_class / n_journeys * 100, n_class)
-        return [n_journeys, class_summary]
+        if self.show_class_summary:
+            class_summary = {}
+            for veh_class in set(veh_classes):
+                n_class = len([c for c in veh_classes if veh_class == c])
+                class_summary[veh_class] = (n_class / n_journeys * 100, n_class)
+            return [n_journeys, class_summary]
+        else:
+            return [n_journeys]
 
     def stat_descriptions(self):
-        return ["No. journeys", "Journeys by class (percentage, No. journeys)"]
+        if self.show_class_summary:
+            return ["No. journeys", "Journeys by class (percentage, No. journeys)"]
+        else:
+            return ["No. journeys"]
