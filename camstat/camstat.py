@@ -162,15 +162,3 @@ class DataSearcher(object):
             return {key: self.apply_stats(value) for key, value in group_or_rows.items()}
         else:
             raise Exception("Unknown group type:{}".format(type(group_or_rows)))
-
-
-if __name__=="__main__":
-    parser = argparse.ArgumentParser(description="Script for loading data from anpr spreadsheets into a db")
-    parser.add_argument("xlsx_dir", help="path to the directory where the spreadsheets are")
-    parser.add_argument("dbname", help="name of the db to create")
-    parser.add_argument("password", help="password to the database")
-    args = parser.parse_args()
-    for spreadsheet in glob.glob(os.path.join(os.path.abspath(args.xlsx_dir), "*.xlsx")):
-        wb = openpyxl.load_workbook(filename=spreadsheet, read_only=True)
-        DataLoader(wb, args.dbname, args.password).load()
-        print("loaded:{}".format(spreadsheet))
