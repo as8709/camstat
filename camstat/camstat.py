@@ -1,10 +1,7 @@
-import openpyxl
 import psycopg2 as psy
 from psycopg2 import sql
 import datetime
-import glob
-import os
-import argparse
+
 import re
 import csv
 import functools
